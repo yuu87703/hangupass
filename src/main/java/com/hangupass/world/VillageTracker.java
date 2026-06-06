@@ -96,18 +96,21 @@ public class VillageTracker {
         Set<ChunkPos> processedChunks = new HashSet<>();
 
         for (int cx = -radiusChunks; cx <= radiusChunks; cx++) {
+            final int fx = cx;
             for (int cz = -radiusChunks; cz <= radiusChunks; cz++) {
-                ChunkPos chunkPos = new ChunkPos(cx, cz);
+                final int fz = cz;
+                ChunkPos chunkPos = new ChunkPos(fx, fz);
+                final ChunkPos fChunkPos = chunkPos;
 
                 tasks.add(() -> {
                     // 只扫描已生成的区块
-                    if (!level.hasChunk(cx, cz)) return;
+                    if (!level.hasChunk(fx, fz)) return;
 
                     synchronized (processedChunks) {
-                        if (!processedChunks.add(chunkPos)) return;
+                        if (!processedChunks.add(fChunkPos)) return;
                     }
 
-                    var chunk = level.getChunk(cx, cz, ChunkStatus.EMPTY, false);
+                    var chunk = level.getChunk(fx, fz, ChunkStatus.EMPTY, false);
                     if (chunk == null) return;
 
                     // 获取区块中所有结构
