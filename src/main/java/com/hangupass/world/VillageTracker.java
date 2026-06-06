@@ -76,7 +76,7 @@ public class VillageTracker {
         // 自动发现模组村庄结构 (按关键词)
         List<Holder<Structure>> moddedVillageHolders = new ArrayList<>();
         if (detectModded) {
-            for (Holder<Structure> holder : structureRegistry.holders()) {
+            for (Holder<Structure> holder : (Iterable<Holder<Structure>>) (Object) structureRegistry.holders()) {
                 String path = holder.unwrapKey()
                         .map(k -> k.location().getPath())
                         .orElse("");
@@ -113,8 +113,7 @@ public class VillageTracker {
                     ChunkPos pos = chunk.getPos();
                     for (Holder<Structure> holder : allTargets) {
                         StructureStart start = level.structureManager().getStartForStructure(
-                                pos, holder,
-                                level.structureManager().createContext());
+                                pos, holder);
                         if (start != null && start.isValid()) {
                             BlockPos center = start.getBoundingBox().getCenter();
                             String type = holder.unwrapKey()
