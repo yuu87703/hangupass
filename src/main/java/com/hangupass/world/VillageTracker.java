@@ -7,6 +7,7 @@ import com.hangupass.Hangupass;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -14,7 +15,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.chunk.ChunkStatus;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
@@ -67,7 +68,7 @@ public class VillageTracker {
                                                   boolean detectModded) {
         List<Runnable> tasks = new ArrayList<>();
         Registry<Structure> structureRegistry = level.registryAccess()
-                .lookupOrThrow(Registries.STRUCTURE);
+                .registryOrThrow(Registries.STRUCTURE);
 
         // 原版村庄
         List<Holder<Structure>> vanillaHolders = VANILLA_VILLAGES.stream()
@@ -77,7 +78,8 @@ public class VillageTracker {
         // 自动发现模组村庄结构 (按关键词)
         List<Holder<Structure>> moddedVillageHolders = new ArrayList<>();
         if (detectModded) {
-            for (Holder<Structure> holder : structureRegistry.holders().toList()) {
+            // holders() returns Iterable<Holder<Structure>> in 1.21.1 Registry
+            for (Holder<Structure> holder : (Iterable<Holder<Structure>>) (Object) structureRegistry.holders()) {
                 String path = holder.unwrapKey()
                         .map(k -> k.location().getPath())
                         .orElse("");

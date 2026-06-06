@@ -93,7 +93,7 @@ public class VillagePairManager {
             if (config.buildGates) {
                 double distance = Math.sqrt(seg.from().pos().distSqr(seg.to().pos()));
                 if (distance >= config.gateMinDistance) {
-                    gateBuilder.buildAtRoadMidpoint(seg.path(), style);
+                    gateBuilder.buildAtRoadMidpoint(seg.path(), style, distance);
                 }
             }
         }

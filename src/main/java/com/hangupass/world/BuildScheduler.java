@@ -79,7 +79,7 @@ public class BuildScheduler {
         ServerLevel overworld = server.getLevel(Level.OVERWORLD);
         if (overworld == null) return;
 
-        List<Runnable> tasks = VillageTracker.createScanTasks(overworld, radiusChunks);
+        List<Runnable> tasks = VillageTracker.createScanTasks(overworld, radiusChunks, true);
         getInstance().scheduleBatch("village-scan", tasks, chunksPerTick);
     }
 
