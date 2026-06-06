@@ -115,15 +115,17 @@ public class VillageTracker {
                     for (var entry : allStarts.entrySet()) {
                         StructureStart start = entry.getValue();
                         if (start == null || !start.isValid()) continue;
-                        Holder<Structure> holder = entry.getKey();
+                        Structure structure = entry.getKey();
                         // 检查是否匹配目标
                         boolean matches = allTargets.stream().anyMatch(h ->
-                                h.unwrapKey().equals(holder.unwrapKey()));
+                                h.unwrapKey().isPresent() && structure == h.value());
                         if (!matches) continue;
 
                         BlockPos center = start.getBoundingBox().getCenter();
-                        String type = holder.unwrapKey()
-                                .map(k -> k.location().getPath())
+                        String type = allTargets.stream()
+                                .filter(h -> h.unwrapKey().isPresent() && structure == h.value())
+                                .findFirst()
+                                .map(h -> h.unwrapKey().get().location().getPath())
                                 .orElse("unknown");
                         VillageInfo info = new VillageInfo(center, type, start);
 
