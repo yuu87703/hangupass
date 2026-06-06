@@ -14,6 +14,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.SectionPos;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
@@ -110,31 +111,26 @@ public class VillageTracker {
                     var chunk = level.getChunk(cx, cz, ChunkStatus.EMPTY, false);
                     if (chunk == null) return;
 
-                    var structureStarts = chunk.getAllStructureStarts();
-                    for (var entry : structureStarts.entrySet()) {
-                        StructureStart start = entry.getValue();
-                        if (start == null || !start.isValid()) continue;
-                        
-                        // 检查结构类型是否匹配目标列表
-                        Holder<Structure> holder = entry.getKey();
-                        boolean matches = allTargets.stream().anyMatch(h -> {
-                            return h.unwrapKey().equals(holder.unwrapKey());
-                        });
-                        if (!matches) continue;
+                    SectionPos sectionPos = SectionPos.of(chunkPos, level.getMinSection());
+                    for (Holder<Structure> holder : allTargets) {
+                        var structureStarts = level.structureManager().startsForStructure(sectionPos, holder);
+                        for (StructureStart start : structureStarts) {
+                            if (start == null || !start.isValid()) continue;
 
-                        BlockPos center = start.getBoundingBox().getCenter();
-                        String type = holder.unwrapKey()
-                                .map(k -> k.location().getPath())
-                                .orElse("unknown");
-                        VillageInfo info = new VillageInfo(center, type, start);
+                            BlockPos center = start.getBoundingBox().getCenter();
+                            String type = holder.unwrapKey()
+                                    .map(k -> k.location().getPath())
+                                    .orElse("unknown");
+                            VillageInfo info = new VillageInfo(center, type, start);
 
-                        synchronized (discoveredVillages) {
+                            synchronized (discoveredVillages) {
                             if (!discoveredVillages.contains(info)) {
                                 discoveredVillages.add(info);
                                 Hangupass.LOGGER.info("Found village: [{}] at {}",
                                         type, center.toShortString());
                             }
                         }
+                    }
                     }
                 });
             }
