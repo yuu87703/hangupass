@@ -14,7 +14,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
@@ -111,10 +110,8 @@ public class VillageTracker {
                     var chunk = level.getChunk(cx, cz, ChunkStatus.EMPTY, false);
                     if (chunk == null) return;
 
-                    BlockPos chunkOrigin = chunkPos.getWorldPosition();
-                    // 用 StructureManager 搜索该区块范围内的结构
-                    var allStarts = level.structureManager().getAllStructureStartsForSection(
-                            SectionPos.of(chunkPos, level.getMinSection()));
+                    // 获取区块中所有结构
+                    var allStarts = chunk.getAllStarts();
                     for (var entry : allStarts.entrySet()) {
                         StructureStart start = entry.getValue();
                         if (start == null || !start.isValid()) continue;
