@@ -1,9 +1,7 @@
 package com.hangupass.world;
 
 import com.hangupass.Hangupass;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.Level;
 
 import java.util.*;
 import java.util.function.Consumer;
@@ -69,18 +67,6 @@ public class BuildScheduler {
 
     public static BuildScheduler getInstance() {
         return INSTANCE;
-    }
-
-    /**
-     * 将村庄扫描拆成多个区块批次。
-     */
-    public static void scheduleVillageScan(MinecraftServer server,
-                                            int radiusChunks, int chunksPerTick) {
-        ServerLevel overworld = server.getLevel(Level.OVERWORLD);
-        if (overworld == null) return;
-
-        List<Runnable> tasks = VillageTracker.createScanTasks(overworld, radiusChunks, true);
-        getInstance().scheduleBatch("village-scan", tasks, chunksPerTick);
     }
 
     /**

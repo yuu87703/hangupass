@@ -6,28 +6,26 @@ import com.google.gson.reflect.TypeToken;
 import com.hangupass.Hangupass;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.structure.Structure;
-import net.minecraft.world.level.levelgen.structure.StructureStart;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.stream.Collectors;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * 村庄扫描器。
- * 扫描世界中已生成的村庄，支持原版 + 模组村庄，支持缓存。
+ * 使用种子搜索（/locate 同款算法）扫描世界中所有村庄。
+ * 不依赖区块是否加载，新世界也能找到。
  */
 public class VillageTracker {
     // 原版村庄结构 ID
@@ -39,19 +37,12 @@ public class VillageTracker {
             ResourceKey.create(Registries.STRUCTURE, ResourceLocation.withDefaultNamespace("village_snowy"))
     );
 
-    // 额外模组村庄前缀 (自动发现) — 启动时从 config 覆盖
     private static Set<String> villageKeywords = new HashSet<>(Set.of("village", "town", "settlement", "hamlet"));
-
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-
-    // 结果缓存
     private static final List<VillageInfo> discoveredVillages = new ArrayList<>();
     private static boolean scanned = false;
     private static Path cacheFile = null;
 
-    /**
-     * 设置关键词 (从配置加载)。
-     */
     public static void setVillageKeywords(Set<String> keywords) {
         if (keywords != null && !keywords.isEmpty()) {
             villageKeywords = new HashSet<>(keywords);
@@ -59,97 +50,9 @@ public class VillageTracker {
     }
 
     /**
-     * 创建分块扫描任务列表 (每任务 = 1 个区块)。
-     *
-     * @param detectModded 是否自动发现模组村庄
-     */
-    public static List<Runnable> createScanTasks(ServerLevel level, int radiusChunks,
-                                                  boolean detectModded) {
-        List<Runnable> tasks = new ArrayList<>();
-        Registry<Structure> structureRegistry = level.registryAccess()
-                .registryOrThrow(Registries.STRUCTURE);
-
-        // 原版村庄
-        List<Holder<Structure>> vanillaHolders = VANILLA_VILLAGES.stream()
-                .map(key -> (Holder<Structure>) structureRegistry.getHolderOrThrow(key))
-                .toList();
-
-        // 自动发现模组村庄结构 (按关键词)
-        List<Holder<Structure>> moddedVillageHolders = new ArrayList<>();
-        if (detectModded) {
-            for (Holder<Structure> holder : structureRegistry.holders().collect(Collectors.toList())) {
-                String path = holder.unwrapKey()
-                        .map(k -> k.location().getPath())
-                        .orElse("");
-                boolean isVillage = villageKeywords.stream().anyMatch(path::contains);
-                if (isVillage && !VANILLA_VILLAGES.contains(holder.unwrapKey().orElse(null))) {
-                    moddedVillageHolders.add(holder);
-                    Hangupass.LOGGER.info("Detected modded village structure: {}", path);
-                }
-            }
-        }
-
-        List<Holder<Structure>> allTargets = new ArrayList<>();
-        allTargets.addAll(vanillaHolders);
-        allTargets.addAll(moddedVillageHolders);
-
-        // 创建标记数组避免重复
-        Set<ChunkPos> processedChunks = new HashSet<>();
-
-        for (int cx = -radiusChunks; cx <= radiusChunks; cx++) {
-            final int fx = cx;
-            for (int cz = -radiusChunks; cz <= radiusChunks; cz++) {
-                final int fz = cz;
-                ChunkPos chunkPos = new ChunkPos(fx, fz);
-                final ChunkPos fChunkPos = chunkPos;
-
-                tasks.add(() -> {
-                    // 只扫描已生成的区块
-                    if (!level.hasChunk(fx, fz)) return;
-
-                    synchronized (processedChunks) {
-                        if (!processedChunks.add(fChunkPos)) return;
-                    }
-
-                    var chunk = level.getChunk(fx, fz, ChunkStatus.EMPTY, false);
-                    if (chunk == null) return;
-
-                    // 获取区块中所有结构
-                    var allStarts = chunk.getAllStarts();
-                    for (var entry : allStarts.entrySet()) {
-                        StructureStart start = entry.getValue();
-                        if (start == null || !start.isValid()) continue;
-                        Structure structure = entry.getKey();
-                        // 检查是否匹配目标
-                        boolean matches = allTargets.stream().anyMatch(h ->
-                                h.unwrapKey().isPresent() && structure == h.value());
-                        if (!matches) continue;
-
-                        BlockPos center = start.getBoundingBox().getCenter();
-                        String type = allTargets.stream()
-                                .filter(h -> h.unwrapKey().isPresent() && structure == h.value())
-                                .findFirst()
-                                .map(h -> h.unwrapKey().get().location().getPath())
-                                .orElse("unknown");
-                        VillageInfo info = new VillageInfo(center, type, start);
-
-                        synchronized (discoveredVillages) {
-                            if (!discoveredVillages.contains(info)) {
-                                discoveredVillages.add(info);
-                                Hangupass.LOGGER.info("Found village: [{}] at {}",
-                                        type, center.toShortString());
-                            }
-                        }
-                    }
-                });
-            }
-        }
-
-        return tasks;
-    }
-
-    /**
-     * 执行完整扫描 (同步，旧版)。
+     * 主扫描方法。
+     * 用种子搜索找村庄，不需要区块已加载。
+     * 从世界原点向外逐层搜索，直到 radius 上限或连续 3 次没找到新村庄。
      */
     public static void scanAllVillages(MinecraftServer server) {
         ServerLevel overworld = server.getLevel(Level.OVERWORLD);
@@ -158,11 +61,9 @@ public class VillageTracker {
             return;
         }
 
-        // 设置缓存路径
         cacheFile = server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
                 .resolve("hangupass_villages.json");
 
-        // 尝试从缓存加载
         if (loadCache()) {
             Hangupass.LOGGER.info("Loaded {} villages from cache", discoveredVillages.size());
             scanned = true;
@@ -172,29 +73,87 @@ public class VillageTracker {
         discoveredVillages.clear();
         scanned = false;
 
-        List<Runnable> tasks = createScanTasks(overworld, 200, true);
-        Hangupass.LOGGER.info("Village scan: {} chunks to check", tasks.size());
+        // 收集所有目标结构 Holder
+        Registry<Structure> registry = overworld.registryAccess().registryOrThrow(Registries.STRUCTURE);
+        List<Holder<Structure>> targetHolders = new ArrayList<>();
 
-        int count = 0;
-        for (Runnable task : tasks) {
-            task.run();
-            count++;
-            if (count % 5000 == 0) {
-                Hangupass.LOGGER.info("Scan progress: {}/{} chunks, {} villages found",
-                        count, tasks.size(), discoveredVillages.size());
+        // 原版村庄
+        for (ResourceKey<Structure> key : VANILLA_VILLAGES) {
+            try {
+                targetHolders.add(registry.getHolderOrThrow(key));
+            } catch (Exception e) {
+                Hangupass.LOGGER.warn("Village structure not found: {}", key.location());
             }
         }
 
+        // 模组村庄 (按关键词自动发现)
+        for (Holder<Structure> holder : registry.holders().collect(Collectors.toList())) {
+            String path = holder.unwrapKey().map(k -> k.location().getPath()).orElse("");
+            boolean isVillage = villageKeywords.stream().anyMatch(path::contains);
+            boolean isDuplicate = VANILLA_VILLAGES.contains(holder.unwrapKey().orElse(null));
+            if (isVillage && !isDuplicate) {
+                targetHolders.add(holder);
+                Hangupass.LOGGER.info("Detected modded village: {}", path);
+            }
+        }
+
+        if (targetHolders.isEmpty()) {
+            Hangupass.LOGGER.warn("No village structures found in registry");
+            return;
+        }
+
+        // 构建 HolderSet
+        HolderSet<Structure> villageSet = HolderSet.direct(targetHolders);
+
+        // 从原点向外搜索
+        BlockPos searchCenter = BlockPos.ZERO;
+        int maxRadius = 100; // 区块 = 1600 格
+        int noNewVillageCount = 0;
+        int totalFound = 0;
+
+        Hangupass.LOGGER.info("Searching for villages (seed-based)...");
+
+        while (searchCenter.getX() < maxRadius * 16 && noNewVillageCount < 3) {
+            var result = overworld.getChunkSource().getGenerator()
+                    .findNearestMapStructure(overworld, villageSet, searchCenter,
+                            maxRadius, false);
+
+            if (result == null) {
+                noNewVillageCount++;
+                searchCenter = searchCenter.offset(200, 0, 200);
+                continue;
+            }
+
+            BlockPos villagePos = result.getFirst();
+            Holder<Structure> holder = result.getSecond();
+            String type = holder.unwrapKey().map(k -> k.location().getPath()).orElse("unknown");
+
+            VillageInfo info = new VillageInfo(villagePos, type, null);
+
+            if (!discoveredVillages.contains(info)) {
+                discoveredVillages.add(info);
+                totalFound++;
+                Hangupass.LOGGER.info("Found village #{}: [{}] at {}", totalFound, type, villagePos.toShortString());
+                noNewVillageCount = 0;
+            } else {
+                noNewVillageCount++;
+            }
+
+            // 从刚找到的村庄偏移，继续搜索下一个
+            searchCenter = villagePos.offset(200, 0, 200);
+        }
+
         scanned = true;
-        Hangupass.LOGGER.info("Village scan complete: {} villages found", discoveredVillages.size());
+        Hangupass.LOGGER.info("Village scan complete: {} villages found", totalFound);
 
-        // 保存缓存
-        saveCache();
-
-        // 排序输出
-        discoveredVillages.sort(Comparator.comparing(v -> v.pos().toShortString()));
-        for (VillageInfo v : discoveredVillages) {
-            Hangupass.LOGGER.info("  {}: {} type={}", v.name(), v.pos().toShortString(), v.type());
+        if (totalFound > 0) {
+            saveCache();
+            discoveredVillages.sort(Comparator.comparing(v -> v.pos().toShortString()));
+            for (VillageInfo v : discoveredVillages) {
+                Hangupass.LOGGER.info("  {} @ {}", v.name(), v.pos().toShortString());
+            }
+        } else {
+            Hangupass.LOGGER.info("No villages found in range. Try /hangupass rescan after exploring.");
         }
     }
 
@@ -208,18 +167,16 @@ public class VillageTracker {
 
     // === 缓存 ===
 
-    /**
-     * 村庄列表缓存到 JSON (保存/重启后不用重扫)。
-     */
     private static void saveCache() {
         if (cacheFile == null) return;
-        List<CacheEntry> entries = discoveredVillages.stream()
-                .map(v -> new CacheEntry(v.pos().getX(), v.pos().getY(), v.pos().getZ(), v.type()))
-                .toList();
         try {
+            List<CacheEntry> entries = discoveredVillages.stream()
+                    .map(v -> new CacheEntry(v.pos().getX(), v.pos().getY(), v.pos().getZ(), v.type()))
+                    .toList();
             Files.writeString(cacheFile, GSON.toJson(entries));
+            Hangupass.LOGGER.info("Village cache saved");
         } catch (IOException e) {
-            Hangupass.LOGGER.warn("Failed to save village cache: {}", e.getMessage());
+            Hangupass.LOGGER.warn("Failed to save cache: {}", e.getMessage());
         }
     }
 
@@ -229,15 +186,13 @@ public class VillageTracker {
             String json = Files.readString(cacheFile);
             List<CacheEntry> entries = GSON.fromJson(json, new TypeToken<List<CacheEntry>>() {}.getType());
             if (entries == null || entries.isEmpty()) return false;
-
             discoveredVillages.clear();
             for (CacheEntry e : entries) {
-                BlockPos pos = new BlockPos(e.x, e.y, e.z);
-                discoveredVillages.add(new VillageInfo(pos, e.type, null));
+                discoveredVillages.add(new VillageInfo(new BlockPos(e.x, e.y, e.z), e.type, null));
             }
             return true;
         } catch (Exception e) {
-            Hangupass.LOGGER.warn("Failed to load village cache: {}", e.getMessage());
+            Hangupass.LOGGER.warn("Failed to load cache: {}", e.getMessage());
             return false;
         }
     }
@@ -248,7 +203,8 @@ public class VillageTracker {
 
     public record VillageInfo(BlockPos pos, String type, StructureStart start) {
         public String name() {
-            return String.format("village_%s_%d_%d", type.replace("village_", ""), pos.getX(), pos.getZ());
+            return String.format("village_%s_%d_%d",
+                    type.replace("village_", ""), pos.getX(), pos.getZ());
         }
 
         @Override
@@ -264,4 +220,6 @@ public class VillageTracker {
             return pos.hashCode();
         }
     }
+
+
 }
