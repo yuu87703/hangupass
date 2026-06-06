@@ -43,7 +43,7 @@ public class BuildScheduler {
             try {
                 task.run();
             } catch (Exception e) {
-                Hangupass.LOGGER.error("BuildScheduler task failed: {}", e.getMessage());
+                Hangupass.LOGGER.error("BuildScheduler task failed", e);
             }
             currentBatchItems++;
         }

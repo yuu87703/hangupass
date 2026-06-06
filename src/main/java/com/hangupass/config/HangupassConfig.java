@@ -19,7 +19,7 @@ public class HangupassConfig {
 
     // === 扫描 ===
     public int scanRadiusChunks = 200;
-    public int scanDelayTicks = 100;
+    public int scanDelayTicks = 400; // 20 秒
     public boolean enableCache = true;                  // 缓存村庄位置到文件
     public boolean detectModdedVillages = true;          // 自动发现模组村庄
     public List<String> extraVillageKeywords = List.of(  // 额外村庄关键词
