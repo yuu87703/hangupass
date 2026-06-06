@@ -7,7 +7,6 @@ import com.hangupass.Hangupass;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
-import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -16,7 +15,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
-import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
 
@@ -72,14 +70,13 @@ public class VillageTracker {
 
         // 原版村庄
         List<Holder<Structure>> vanillaHolders = VANILLA_VILLAGES.stream()
-                .map(structureRegistry::getHolderOrThrow)
+                .map(key -> (Holder<Structure>) structureRegistry.getHolderOrThrow(key))
                 .toList();
 
         // 自动发现模组村庄结构 (按关键词)
         List<Holder<Structure>> moddedVillageHolders = new ArrayList<>();
         if (detectModded) {
-            // holders() returns Iterable<Holder<Structure>> in 1.21.1 Registry
-            for (Holder<Structure> holder : (Iterable<Holder<Structure>>) (Object) structureRegistry.holders()) {
+            for (Holder<Structure> holder : structureRegistry.holders()) {
                 String path = holder.unwrapKey()
                         .map(k -> k.location().getPath())
                         .orElse("");
@@ -110,12 +107,13 @@ public class VillageTracker {
                         if (!processedChunks.add(chunkPos)) return;
                     }
 
-                    LevelChunk chunk = level.getChunk(cx, cz, ChunkStatus.EMPTY, false);
+                    var chunk = level.getChunk(cx, cz, ChunkStatus.EMPTY, false);
                     if (chunk == null) return;
 
+                    ChunkPos pos = chunk.getPos();
                     for (Holder<Structure> holder : allTargets) {
                         StructureStart start = level.structureManager().getStartForStructure(
-                                chunkPos, holder,
+                                pos, holder,
                                 level.structureManager().createContext());
                         if (start != null && start.isValid()) {
                             BlockPos center = start.getBoundingBox().getCenter();

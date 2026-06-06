@@ -353,9 +353,9 @@ public class RoadBuilder {
             Blocks.BIRCH_DOOR, Blocks.JUNGLE_DOOR, Blocks.ACACIA_DOOR,
             Blocks.CHERRY_DOOR, Blocks.IRON_DOOR,
             Blocks.OAK_TRAPDOOR, Blocks.SPRUCE_TRAPDOOR,
-            Blocks.BED, Blocks.RED_BED, Blocks.WHITE_BED,
+            Blocks.RED_BED, Blocks.BLUE_BED, Blocks.WHITE_BED, Blocks.BLACK_BED,
+            Blocks.GREEN_BED, Blocks.YELLOW_BED, Blocks.BROWN_BED,
             Blocks.OAK_FENCE_GATE, Blocks.SPRUCE_FENCE_GATE,
-            Blocks.ITEM_FRAME, Blocks.PAINTING,
             Blocks.FARMLAND, Blocks.WHEAT, Blocks.CARROTS, Blocks.POTATOES,
             Blocks.BEETROOTS, Blocks.MELON, Blocks.PUMPKIN,
             Blocks.CAKE, Blocks.COMPOSTER
@@ -396,8 +396,7 @@ public class RoadBuilder {
 
         // 4. 保护花、草 (保持自然)
         if (block instanceof FlowerBlock || block instanceof TallFlowerBlock
-                || block instanceof GrassBlock || block instanceof FernBlock
-                || block instanceof BushBlock) return true;
+                || block instanceof net.minecraft.world.level.block.GrassBlock) return true;
 
         // 5. 保护水/熔岩源
         if (!existing.getFluidState().isEmpty() && existing.getFluidState().isSource()) return true;

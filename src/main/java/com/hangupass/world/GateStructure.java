@@ -328,8 +328,7 @@ public class GateStructure {
         if (state.isAir()) return false;
         Block block = state.getBlock();
         return block == Blocks.CHEST || block == Blocks.CRAFTING_TABLE
-                || block == Blocks.FURNACE || block == Blocks.BED
-                || block == Blocks.OAK_DOOR || block == Blocks.IRON_DOOR
+                || block == Blocks.FURNACE
                 || state.hasBlockEntity();
     }
 }
