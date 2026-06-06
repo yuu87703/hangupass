@@ -110,23 +110,29 @@ public class VillageTracker {
                     var chunk = level.getChunk(cx, cz, ChunkStatus.EMPTY, false);
                     if (chunk == null) return;
 
-                    ChunkPos pos = chunk.getPos();
-                    for (Holder<Structure> holder : allTargets) {
-                        StructureStart start = level.structureManager().getStartForStructure(
-                                pos, holder);
-                        if (start != null && start.isValid()) {
-                            BlockPos center = start.getBoundingBox().getCenter();
-                            String type = holder.unwrapKey()
-                                    .map(k -> k.location().getPath())
-                                    .orElse("unknown");
-                            VillageInfo info = new VillageInfo(center, type, start);
+                    var structureStarts = chunk.getAllStructureStarts();
+                    for (var entry : structureStarts.entrySet()) {
+                        StructureStart start = entry.getValue();
+                        if (start == null || !start.isValid()) continue;
+                        
+                        // 检查结构类型是否匹配目标列表
+                        Holder<Structure> holder = entry.getKey();
+                        boolean matches = allTargets.stream().anyMatch(h -> {
+                            return h.unwrapKey().equals(holder.unwrapKey());
+                        });
+                        if (!matches) continue;
 
-                            synchronized (discoveredVillages) {
-                                if (!discoveredVillages.contains(info)) {
-                                    discoveredVillages.add(info);
-                                    Hangupass.LOGGER.info("Found village: [{}] at {}",
-                                            type, center.toShortString());
-                                }
+                        BlockPos center = start.getBoundingBox().getCenter();
+                        String type = holder.unwrapKey()
+                                .map(k -> k.location().getPath())
+                                .orElse("unknown");
+                        VillageInfo info = new VillageInfo(center, type, start);
+
+                        synchronized (discoveredVillages) {
+                            if (!discoveredVillages.contains(info)) {
+                                discoveredVillages.add(info);
+                                Hangupass.LOGGER.info("Found village: [{}] at {}",
+                                        type, center.toShortString());
                             }
                         }
                     }
