@@ -20,6 +20,7 @@ import net.minecraft.world.level.levelgen.structure.StructureStart;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.stream.Collectors;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.function.Consumer;
@@ -76,7 +77,7 @@ public class VillageTracker {
         // 自动发现模组村庄结构 (按关键词)
         List<Holder<Structure>> moddedVillageHolders = new ArrayList<>();
         if (detectModded) {
-            for (Holder<Structure> holder : (Iterable<Holder<Structure>>) (Object) structureRegistry.holders()) {
+            for (Holder<Structure> holder : structureRegistry.holders().collect(Collectors.toList())) {
                 String path = holder.unwrapKey()
                         .map(k -> k.location().getPath())
                         .orElse("");
