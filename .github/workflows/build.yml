@@ -2,13 +2,13 @@ name: Build Mod
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
     paths-ignore:
-      - '**.md'
-      - '.gitignore'
+      - "**.md"
+      - ".gitignore"
   pull_request:
-    branches: [ "main", "master" ]
-  workflow_dispatch:  # 手动触发
+    branches: ["main", "master"]
+  workflow_dispatch: # 手动触发
 
 jobs:
   build:
@@ -21,7 +21,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: 21
-          distribution: 'temurin'
+          distribution: "temurin"
           cache: gradle
 
       - name: Make Gradle wrapper executable
